@@ -168,6 +168,19 @@
     display:flex;align-items:center;gap:6px}
   .chip button{background:none;border:none;color:var(--red);cursor:pointer;font-size:15px;line-height:1;opacity:.6}
   .chip button:hover{opacity:1}
+  /* ===== Gantt (tela) ===== */
+  .gantt{margin-top:4px}
+  .gantt-row,.gantt-head{display:flex;align-items:center;margin-bottom:7px}
+  .gantt-name{flex:0 0 38%;padding-right:10px;font-weight:600;font-size:13px;overflow:hidden;
+    white-space:nowrap;text-overflow:ellipsis}
+  .gantt-track{flex:1;position:relative;height:24px;background:#eef1f5;border-radius:12px}
+  .gantt-bar{position:absolute;top:0;height:24px;border-radius:12px;display:flex;align-items:center;
+    justify-content:flex-end;padding-right:8px;transition:.4s;min-width:26px}
+  .gantt-pct{color:#fff;font-size:11px;font-weight:700}
+  .gantt-scale{background:none;font-size:11px;color:var(--grey)}
+  .gantt-foot{font-size:11.5px;color:var(--grey);margin-top:8px}
+  @media(max-width:760px){.gantt-name{flex-basis:42%;font-size:12px}}
+  @media print{.no-print{display:none!important}}
   @media(max-width:760px){
     .g2,.g3,.g4{grid-template-columns:1fr}
     .kpis{grid-template-columns:1fr 1fr}
@@ -250,7 +263,7 @@
 <script>
 // endpoint da sua serverless function no Vercel.
 const API_CONTRATO = "/api/ler-contrato";
-const USE_FIREBASE = true;            // troque para true após colar a config
+const USE_FIREBASE = true;            // ligado
 const FIREBASE_CONFIG = {
   apiKey: "AIzaSyCfSDA7IaemHfyxUQU0vpJoLzbdX3K4n7M",
   authDomain: "abertura-de-obras-knc.firebaseapp.com",
@@ -259,7 +272,8 @@ const FIREBASE_CONFIG = {
   messagingSenderId: "619364016508",
   appId: "1:619364016508:web:56edcae124afc4260b04f9",
   measurementId: "G-42WV89XHEE"
-};</script>
+};
+</script>
 
 <script>
 /* =========================================================
@@ -654,11 +668,19 @@ function renderPainel(){
   const libOk=o.liberacao.every(l=>l.ok);
   const color=(p)=>p>=100?'var(--green)':p>0?'var(--yellow)':'var(--red)';
   document.getElementById('v-painel').innerHTML=`
+  <div class="card no-print" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
+    <div><b style="color:var(--navy)">${esc(o.nome)}</b><div style="font-size:12px;color:var(--grey)">Relatório completo da obra</div></div>
+    <button class="btn btn-primary" onclick="imprimirObra()">📄 Imprimir / Salvar PDF</button>
+  </div>
   <div class="kpis">
     <div class="kpi orange"><div class="k-label">Avanço geral</div><div class="k-val">${av}%</div></div>
     <div class="kpi ${libOk?'green':'red'}"><div class="k-label">Liberação</div><div class="k-val">${libOk?'OK':'Pendente'}</div></div>
     <div class="kpi"><div class="k-label">Checklist</div><div class="k-val">${chkDone}/${o.checklist.length}</div></div>
     <div class="kpi ${matPend?'red':'green'}"><div class="k-label">Materiais pendentes</div><div class="k-val">${matPend}</div></div>
+  </div>
+  <div class="card">
+    <h2>Cronograma — Gantt</h2>
+    ${ganttHTML(o)}
   </div>
   <div class="card">
     <h2>Etapas — avanço</h2>
@@ -689,6 +711,150 @@ function renderPainel(){
       <div class="r-top"><span class="r-date">${fmtDate(r.data)}</span><span class="r-clima">${esc(r.clima)}</span></div>
       <p>${esc(r.serv)||'—'}</p></div>`).join(''):'<div class="empty"><b>Sem relatórios</b>Registre o diário para acompanhar aqui.</div>'}</div>
   </div>`;
+}
+
+/* ===================== GANTT ===================== */
+function parseDate(s){if(!s)return null;const p=String(s).split('-');if(p.length!==3)return null;
+  const d=new Date(+p[0],+p[1]-1,+p[2]);return isNaN(d)?null:d;}
+function ganttHTML(o){
+  const items=o.etapas.map(e=>({nome:e.nome,ini:parseDate(e.inicio),fim:parseDate(e.fim),av:+e.avanco||0}))
+    .filter(e=>e.ini&&e.fim&&e.fim>=e.ini);
+  const semData=o.etapas.length-items.length;
+  if(!items.length){
+    return `<div class="empty"><b>Sem datas para montar o Gantt</b>Preencha início e fim das etapas na aba Abertura (seção 6). A linha do tempo de avanço abaixo funciona mesmo sem datas.</div>`;
+  }
+  const min=new Date(Math.min(...items.map(i=>i.ini)));
+  const max=new Date(Math.max(...items.map(i=>i.fim)));
+  const totalMs=Math.max(1,max-min);
+  const dias=Math.round(totalMs/86400000)+1;
+  const color=(p)=>p>=100?'#2E9E5B':p>0?'#E0A800':'#9aa6b5';
+  const rows=items.map(e=>{
+    const left=((e.ini-min)/totalMs)*100;
+    const width=Math.max(((e.fim-e.ini)/totalMs)*100,2);
+    return `<div class="gantt-row">
+      <div class="gantt-name">${esc(e.nome)}</div>
+      <div class="gantt-track">
+        <div class="gantt-bar" style="left:${left}%;width:${width}%;background:${color(e.av)}">
+          <span class="gantt-pct">${e.av}%</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+  const fmtBR=(d)=>('0'+d.getDate()).slice(-2)+'/'+('0'+(d.getMonth()+1)).slice(-2);
+  return `<div class="gantt">
+    <div class="gantt-head"><div class="gantt-name"></div>
+      <div class="gantt-track gantt-scale"><span>${fmtBR(min)}</span><span style="float:right">${fmtBR(max)}</span></div></div>
+    ${rows}
+    <div class="gantt-foot">Período: ${fmtBR(min)} a ${fmtBR(max)} · ${dias} dias${semData?` · ${semData} etapa(s) sem data não exibida(s)`:''}</div>
+  </div>`;
+}
+
+/* ===================== IMPRIMIR / PDF ===================== */
+function imprimirObra(){
+  const o=DB.obras[currentId];if(!o)return;
+  const av=Math.round(o.etapas.reduce((s,e)=>s+(+e.avanco||0),0)/o.etapas.length);
+  const fmt=(d)=>fmtDate(d)||'—';
+  const linha=(l,v)=>`<tr><td class="pl">${l}</td><td>${esc(v)||'—'}</td></tr>`;
+  const win=window.open('','_print');
+  const etapasRows=o.etapas.map(e=>`<tr><td>${esc(e.nome)}</td><td>${fmt(e.inicio)}</td><td>${fmt(e.fim)}</td><td>${esc(e.equipe)||'—'}</td><td style="text-align:center">${e.avanco}%</td><td>${esc(e.status)}</td></tr>`).join('');
+  const matRows=o.materiais.length?o.materiais.map(m=>`<tr><td>${esc(m.nome)}</td><td style="text-align:center">${esc(m.qtd)||'—'}</td><td style="text-align:center">${esc(m.un)||'—'}</td><td>${esc(m.forn)||'—'}</td><td>${esc(m.status)}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:#888">Sem materiais cadastrados</td></tr>';
+  const equipeRows=o.equipe.length?o.equipe.map(p=>`<tr><td>${esc(p.nome)}</td><td>${esc(p.funcao)||'—'}</td><td>${fmt(p.entrada)}</td><td>${esc(p.diaria)||'—'}</td><td>${esc(p.tel)||'—'}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:#888">Sem equipe cadastrada</td></tr>';
+  const chkRows=o.checklist.map(c=>`<tr><td style="text-align:center">${c.done?'☑':'☐'}</td><td>${esc(c.item)}</td><td>${esc(c.resp)}</td><td>${esc(c.prazo)}</td></tr>`).join('');
+  const rdoRows=o.rdos.length?[...o.rdos].reverse().map(r=>`<tr><td style="white-space:nowrap">${fmt(r.data)}</td><td>${esc(r.clima)}</td><td>${esc(r.serv)||'—'}</td><td>${esc(r.prob)||'—'}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;color:#888">Sem relatórios</td></tr>';
+  // gantt como imagem inline (reusa o HTML)
+  const gantt=ganttHTML(o);
+  const libOk=o.liberacao.every(l=>l.ok);
+
+  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(o.nome)} — Relatório</title>
+  <style>
+    @page{size:A4;margin:14mm}
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Arial,Helvetica,sans-serif;color:#1B2230;font-size:11px;line-height:1.45}
+    .pg-head{display:flex;align-items:center;gap:12px;border-bottom:3px solid #E8722A;padding-bottom:10px;margin-bottom:14px}
+    .pg-head .t b{font-size:17px;color:#1A2A45;display:block}
+    .pg-head .t span{font-size:11px;color:#666;letter-spacing:1px;text-transform:uppercase}
+    .pg-head .meta{margin-left:auto;text-align:right;font-size:10px;color:#666}
+    h3{font-size:12px;text-transform:uppercase;letter-spacing:.5px;color:#1A2A45;margin:16px 0 7px;
+      border-left:4px solid #E8722A;padding-left:8px}
+    table{width:100%;border-collapse:collapse;margin-bottom:6px}
+    th{background:#1A2A45;color:#fff;font-size:9.5px;text-transform:uppercase;text-align:left;padding:5px 7px}
+    td{padding:5px 7px;border-bottom:1px solid #e2e6ec;font-size:10.5px;vertical-align:top}
+    td.pl{font-weight:bold;color:#1A2A45;width:32%}
+    .kpis{display:flex;gap:8px;margin-bottom:6px}
+    .kpi{flex:1;border:1px solid #e2e6ec;border-top:3px solid #2E75B6;border-radius:6px;padding:8px}
+    .kpi .l{font-size:8.5px;text-transform:uppercase;color:#666;font-weight:bold}
+    .kpi .v{font-size:16px;font-weight:800;color:#1A2A45}
+    /* gantt */
+    .gantt{font-size:9.5px;margin:6px 0}
+    .gantt-row,.gantt-head{display:flex;align-items:center;margin-bottom:4px}
+    .gantt-name{flex:0 0 32%;padding-right:8px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
+    .gantt-track{flex:1;position:relative;height:16px;background:#eef1f5;border-radius:8px}
+    .gantt-bar{position:absolute;top:0;height:16px;border-radius:8px;display:flex;align-items:center;justify-content:flex-end;padding-right:5px}
+    .gantt-pct{color:#fff;font-size:8px;font-weight:bold}
+    .gantt-scale{background:none;font-size:8.5px;color:#666}
+    .gantt-foot{font-size:9px;color:#666;margin-top:4px}
+    .empty{padding:12px;text-align:center;color:#888;border:1px dashed #ccc;border-radius:6px}
+    .sig{display:flex;gap:30px;margin-top:30px}
+    .sig div{flex:1;border-top:1px solid #333;padding-top:5px;text-align:center;font-size:10px}
+    .avoid{page-break-inside:avoid}
+    @media print{.avoid{page-break-inside:avoid}}
+  </style></head><body>
+  <div class="pg-head">
+    <div class="t"><b>${esc(o.nome)}</b><span>KNC Brasil · Relatório de Obra</span></div>
+    <div class="meta">Emitido em ${new Date().toLocaleDateString('pt-BR')}<br>Avanço geral: <b>${av}%</b></div>
+  </div>
+
+  <div class="kpis">
+    <div class="kpi"><div class="l">Avanço</div><div class="v">${av}%</div></div>
+    <div class="kpi"><div class="l">Liberação</div><div class="v">${libOk?'OK':'Pend.'}</div></div>
+    <div class="kpi"><div class="l">Checklist</div><div class="v">${o.checklist.filter(c=>c.done).length}/${o.checklist.length}</div></div>
+    <div class="kpi"><div class="l">Equipe</div><div class="v">${o.equipe.length}</div></div>
+  </div>
+
+  <h3>Identificação</h3>
+  <table>
+    ${linha('Cliente / Contrato',o.cliente)}
+    ${linha('Endereço',o.info.endereco)}
+    ${linha('Responsável',o.info.responsavel)}
+    ${linha('Início previsto',fmt(o.info.inicio))}
+    ${linha('Prazo',o.info.prazo)}
+    ${linha('Valor',o.info.valor)}
+    ${linha('Status',o.info.mobilizacao)}
+  </table>
+
+  <h3>Escopo</h3>
+  <table><tr><td>${esc(o.resumo.escopo)||'—'}</td></tr></table>
+
+  <div class="avoid"><h3>Cronograma — Gantt</h3>${gantt}</div>
+
+  <div class="avoid"><h3>Etapas</h3>
+  <table><thead><tr><th>Etapa</th><th>Início</th><th>Fim</th><th>Equipe</th><th>Avanço</th><th>Status</th></tr></thead>
+  <tbody>${etapasRows}</tbody></table></div>
+
+  <div class="avoid"><h3>Equipe</h3>
+  <table><thead><tr><th>Nome</th><th>Função</th><th>Entrada</th><th>Diária</th><th>Telefone</th></tr></thead>
+  <tbody>${equipeRows}</tbody></table></div>
+
+  <div class="avoid"><h3>Materiais</h3>
+  <table><thead><tr><th>Material</th><th>Qtd</th><th>Un</th><th>Fornecedor</th><th>Status</th></tr></thead>
+  <tbody>${matRows}</tbody></table></div>
+
+  <div class="avoid"><h3>Checklist de abertura</h3>
+  <table><thead><tr><th style="width:30px"></th><th>Item</th><th>Responsável</th><th>Prazo</th></tr></thead>
+  <tbody>${chkRows}</tbody></table></div>
+
+  <div class="avoid"><h3>Relatórios diários (RDO)</h3>
+  <table><thead><tr><th>Data</th><th>Clima</th><th>Executado</th><th>Problemas</th></tr></thead>
+  <tbody>${rdoRows}</tbody></table></div>
+
+  <div class="sig">
+    <div>Responsável KNC</div>
+    <div>Cliente / Fiscalização</div>
+  </div>
+
+  </body></html>`);
+  win.document.close();
+  setTimeout(()=>{win.focus();win.print();},400);
 }
 
 /* ===================== IMPORTAR CONTRATO ===================== */
