@@ -179,6 +179,15 @@
   .gantt-pct{color:#fff;font-size:11px;font-weight:700}
   .gantt-scale{background:none;font-size:11px;color:var(--grey)}
   .gantt-foot{font-size:11.5px;color:var(--grey);margin-top:8px}
+  /* ===== Cronograma IA ===== */
+  .cron-ia{background:var(--soft);border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px}
+  .cron-ia>label{font-size:12px;font-weight:700;color:var(--navy);text-transform:uppercase;letter-spacing:.4px}
+  /* ===== Plano semanal ===== */
+  .semana-bloco{border:1px solid var(--line);border-radius:12px;padding:12px;margin-bottom:14px;background:var(--soft)}
+  .semana-head{display:flex;align-items:center;gap:10px;margin-bottom:10px}
+  .semana-titulo{flex:1;font-weight:700;font-size:14px;border:1px solid var(--line);border-radius:8px;padding:8px 10px;background:#fff}
+  .semana-data{font-size:11.5px;color:var(--grey);white-space:nowrap}
+  .semana-head .row-del{font-size:12px;font-weight:700;white-space:nowrap}
   @media(max-width:760px){.gantt-name{flex-basis:42%;font-size:12px}}
   @media print{.no-print{display:none!important}}
   @media(max-width:760px){
@@ -216,7 +225,6 @@
   <nav><div class="tabs">
     <button class="tab active" data-view="obras" onclick="go('obras')">Obras</button>
     <button class="tab" data-view="abertura" onclick="go('abertura')" id="t-ab" disabled>Abertura</button>
-    <button class="tab" data-view="rdo" onclick="go('rdo')" id="t-rdo" disabled>Diário (RDO)</button>
     <button class="tab" data-view="painel" onclick="go('painel')" id="t-pa" disabled>Painel</button>
   </div></nav>
 </header>
@@ -247,7 +255,6 @@
   <section class="view" id="v-abertura"></section>
 
   <!-- ===================== RDO ===================== -->
-  <section class="view" id="v-rdo"></section>
 
   <!-- ===================== PAINEL ===================== -->
   <section class="view" id="v-painel"></section>
@@ -324,8 +331,7 @@ function blankObra(nome,cliente){
     checklist:CHECKLIST_ABERTURA.map(c=>({item:c[0],resp:c[1],prazo:c[2],done:false})),
     equipe:[], materiais:[], epi:[],
     etapas:ETAPAS_PADRAO.map(n=>({nome:n,inicio:"",fim:"",equipe:"",materiais:"",status:"Não iniciado",avanco:0})),
-    semana:["Segunda","Terça","Quarta","Quinta","Sexta","Sábado"].map(d=>({dia:d,servico:"",equipe:"",material:"",meta:""})),
-    rdos:[],
+    semanas:[{titulo:"Semana 1",inicio:"",dias:["Segunda","Terça","Quarta","Quinta","Sexta","Sábado"].map(d=>({dia:d,servico:"",equipe:"",material:"",meta:""}))}],
     liberacao:LIBERACAO.map(l=>({item:l,ok:false,resp:""})),
     updated:Date.now()
   };
@@ -394,12 +400,11 @@ function go(v){
   document.getElementById('v-'+v).classList.add('active');
   document.querySelector('.tab[data-view="'+v+'"]').classList.add('active');
   if(v==='abertura')renderAbertura();
-  if(v==='rdo')renderRDO();
   if(v==='painel')renderPainel();
   window.scrollTo({top:0,behavior:'smooth'});
 }
 function lockTabs(locked){
-  ['t-ab','t-rdo','t-pa'].forEach(id=>document.getElementById(id).disabled=locked);
+  ['t-ab','t-pa'].forEach(id=>document.getElementById(id).disabled=locked);
 }
 
 /* ===================== OBRAS LIST ===================== */
@@ -505,16 +510,26 @@ function renderAbertura(){
 
   <div class="card">
     <h2>6 · Cronograma macro</h2>
+    <div class="cron-ia">
+      <label>Montar cronograma com IA</label>
+      <p class="sub" style="margin:4px 0 8px">Cole o cronograma em texto livre (ex.: "demolição 3 dias a partir de 01/07, depois alvenaria 5 dias..."). A IA monta as etapas com datas e ordem. Você revisa antes de aplicar.</p>
+      <textarea id="cronTexto" placeholder="Cole aqui o cronograma em texto..." style="min-height:90px"></textarea>
+      <div class="btns"><button class="btn btn-primary" onclick="lerCronograma()">Ler cronograma com IA</button></div>
+      <div id="cronStatus"></div>
+    </div>
     <div class="tbl-wrap"><table><thead><tr>
       <th>Etapa</th><th>Início</th><th>Fim</th><th>Equipe</th><th>Avanço %</th><th>Status</th>
     </tr></thead><tbody id="tEtapas">${o.etapas.map((x,idx)=>etapaRow(x,idx)).join('')}</tbody></table></div>
   </div>
 
   <div class="card">
-    <h2>7 · Planejamento da primeira semana</h2>
-    <div class="tbl-wrap"><table><thead><tr>
-      <th>Dia</th><th>Serviços do dia</th><th>Equipe</th><th>Material</th><th>Meta do dia</th>
-    </tr></thead><tbody>${o.semana.map((x,idx)=>semanaRow(x,idx)).join('')}</tbody></table></div>
+    <h2>7 · Plano semanal</h2>
+    <p class="sub">Planeje semana a semana. Use "Gerar semanas pelo cronograma" para criar as semanas automaticamente a partir das datas das etapas (seção 6).</p>
+    <div class="btns" style="margin-bottom:12px">
+      <button class="btn btn-ghost" onclick="gerarSemanas()">Gerar semanas pelo cronograma</button>
+      <button class="btn btn-ghost" onclick="addSemana()">+ Adicionar semana</button>
+    </div>
+    <div id="semanasWrap">${semanasHTML(o)}</div>
   </div>
 
   <div class="card">
@@ -560,12 +575,63 @@ function etapaRow(x,idx){return `<tr>
   <td style="width:90px"><input type="number" min="0" max="100" value="${x.avanco}" onchange="setEtapaAvanco(${idx},this.value)"></td>
   <td><select onchange="setRow('etapas',${idx},'status',this.value)">
     ${['Não iniciado','Em andamento','Concluído'].map(s=>`<option ${x.status===s?'selected':''}>${s}</option>`).join('')}</select></td></tr>`;}
-function semanaRow(x,idx){return `<tr>
-  <td style="font-weight:600;white-space:nowrap">${esc(x.dia)}</td>
-  <td><input value="${esc(x.servico)}" onchange="setRow('semana',${idx},'servico',this.value)"></td>
-  <td><input value="${esc(x.equipe)}" onchange="setRow('semana',${idx},'equipe',this.value)"></td>
-  <td><input value="${esc(x.material)}" onchange="setRow('semana',${idx},'material',this.value)"></td>
-  <td><input value="${esc(x.meta)}" onchange="setRow('semana',${idx},'meta',this.value)"></td></tr>`;}
+function semanasHTML(o){
+  const semanas=getSemanas(o);
+  if(!semanas.length)return `<div class="empty"><b>Nenhuma semana</b>Adicione uma semana ou gere pelo cronograma.</div>`;
+  return semanas.map((sem,si)=>`<div class="semana-bloco">
+    <div class="semana-head">
+      <input class="semana-titulo" value="${esc(sem.titulo)}" onchange="setSemanaTitulo(${si},this.value)" placeholder="Semana ${si+1}">
+      ${sem.inicio?`<span class="semana-data">início ${fmtDate(sem.inicio)}</span>`:''}
+      <button class="row-del" title="Remover semana" onclick="delSemana(${si})">× remover</button>
+    </div>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>Dia</th><th>Serviços do dia</th><th>Equipe</th><th>Material</th><th>Meta do dia</th>
+    </tr></thead><tbody>${sem.dias.map((d,di)=>`<tr>
+      <td style="font-weight:600;white-space:nowrap">${esc(d.dia)}</td>
+      <td><input value="${esc(d.servico)}" onchange="setSemanaDia(${si},${di},'servico',this.value)"></td>
+      <td><input value="${esc(d.equipe)}" onchange="setSemanaDia(${si},${di},'equipe',this.value)"></td>
+      <td><input value="${esc(d.material)}" onchange="setSemanaDia(${si},${di},'material',this.value)"></td>
+      <td><input value="${esc(d.meta)}" onchange="setSemanaDia(${si},${di},'meta',this.value)"></td>
+    </tr>`).join('')}</tbody></table></div>
+  </div>`).join('');
+}
+// compat: obras antigas têm o.semana (array de dias). Converte em runtime.
+function getSemanas(o){
+  if(Array.isArray(o.semanas))return o.semanas;
+  if(Array.isArray(o.semana)){o.semanas=[{titulo:"Semana 1",inicio:"",dias:o.semana}];return o.semanas;}
+  o.semanas=[{titulo:"Semana 1",inicio:"",dias:["Segunda","Terça","Quarta","Quinta","Sexta","Sábado"].map(d=>({dia:d,servico:"",equipe:"",material:"",meta:""}))}];
+  return o.semanas;
+}
+function novaSemana(titulo,inicio){return {titulo:titulo||"Semana",inicio:inicio||"",
+  dias:["Segunda","Terça","Quarta","Quinta","Sexta","Sábado"].map(d=>({dia:d,servico:"",equipe:"",material:"",meta:""}))};}
+function addSemana(){const o=DB.obras[currentId];const s=getSemanas(o);
+  s.push(novaSemana("Semana "+(s.length+1),""));persist();
+  document.getElementById('semanasWrap').innerHTML=semanasHTML(o);}
+function delSemana(i){const o=DB.obras[currentId];const s=getSemanas(o);
+  if(!confirm('Remover esta semana?'))return;s.splice(i,1);persist();
+  document.getElementById('semanasWrap').innerHTML=semanasHTML(o);}
+function setSemanaTitulo(i,v){const o=DB.obras[currentId];getSemanas(o)[i].titulo=v;persist();}
+function setSemanaDia(i,j,campo,v){const o=DB.obras[currentId];getSemanas(o)[i].dias[j][campo]=v;persist();}
+function gerarSemanas(){
+  const o=DB.obras[currentId];
+  const datas=o.etapas.map(e=>[parseDate(e.inicio),parseDate(e.fim)]).flat().filter(Boolean);
+  if(!datas.length){toast('Preencha as datas das etapas no cronograma (seção 6) primeiro','err');return;}
+  const min=new Date(Math.min(...datas)),max=new Date(Math.max(...datas));
+  const totalDias=Math.round((max-min)/86400000)+1;
+  const n=Math.max(1,Math.ceil(totalDias/7));
+  const atual=getSemanas(o);
+  const temConteudo=atual.some(s=>s.dias.some(d=>d.servico||d.equipe||d.material||d.meta));
+  if(temConteudo && !confirm('Isso vai substituir as semanas atuais e o que já foi digitado. Continuar?'))return;
+  const novas=[];
+  for(let i=0;i<n;i++){
+    const ini=new Date(min.getTime()+i*7*86400000);
+    const iso=ini.getFullYear()+'-'+('0'+(ini.getMonth()+1)).slice(-2)+'-'+('0'+ini.getDate()).slice(-2);
+    novas.push(novaSemana("Semana "+(i+1),iso));
+  }
+  o.semanas=novas;persist();
+  document.getElementById('semanasWrap').innerHTML=semanasHTML(o);
+  toast(n+' semana(s) geradas');
+}
 function libRow(l,idx){return `<label class="chk ${l.ok?'done':''}">
   <input type="checkbox" ${l.ok?'checked':''} onchange="toggleLib(${idx},this.checked)">
   <div class="ci-main"><div class="ci-item">${esc(l.item)}</div>
@@ -592,72 +658,6 @@ function renderLibFinal(){const o=DB.obras[currentId];if(!o)return;
   document.getElementById('libFinal').innerHTML=`<div class="lib-final ${all?'go':''}">
     <b>${all?'✓ Liberado para iniciar':'Aguardando liberação'}</b>
     <small>${all?'Todos os itens conferidos. Pode mobilizar.':o.liberacao.filter(l=>l.ok).length+' de '+o.liberacao.length+' itens conferidos'}</small></div>`;}
-
-/* ===================== RDO ===================== */
-function renderRDO(){
-  const o=DB.obras[currentId];if(!o)return;
-  const today=new Date().toISOString().slice(0,10);
-  document.getElementById('v-rdo').innerHTML=`
-  <div class="card">
-    <h2>Novo relatório diário</h2>
-    <p class="sub">Preencha ao fim do dia. Fica registrado e aparece no painel.</p>
-    <div class="grid g2">
-      <div><label>Data</label><input type="date" id="rData" value="${today}"></div>
-      <div><label>Clima / condição</label><select id="rClima">
-        ${['Bom','Nublado','Chuva','Paralisado'].map(c=>`<option>${c}</option>`).join('')}</select></div>
-    </div>
-    <div class="grid" style="margin-top:13px">
-      <div><label>Equipe presente</label><input id="rEquipe" placeholder="quem trabalhou hoje"></div>
-      <div><label>Serviços executados hoje</label><textarea id="rServ"></textarea></div>
-      <div class="grid g2">
-        <div><label>Materiais recebidos</label><textarea id="rReceb"></textarea></div>
-        <div><label>Materiais faltando / comprar</label><textarea id="rFalta"></textarea></div>
-        <div><label>Problemas / impedimentos</label><textarea id="rProb"></textarea></div>
-        <div><label>Previsão para amanhã</label><textarea id="rAmanha"></textarea></div>
-      </div>
-      <div><label>Responsável</label><input id="rResp" value="${esc(o.info.responsavel||'')}"></div>
-    </div>
-    <div class="btns"><button class="btn btn-primary" onclick="saveRDO()">Salvar relatório</button>
-      <button class="btn btn-ghost" onclick="copyRDO()">Copiar p/ WhatsApp</button></div>
-  </div>
-  <div class="card">
-    <h2>Histórico (${o.rdos.length})</h2>
-    <div id="rdoHist">${rdoHistHTML(o)}</div>
-  </div>`;
-}
-function rdoHistHTML(o){
-  if(!o.rdos.length)return `<div class="empty"><b>Nenhum relatório ainda</b>Os relatórios enviados aparecem aqui.</div>`;
-  return [...o.rdos].reverse().map((r,ri)=>`<div class="rdo-item">
-    <div class="r-top"><span class="r-date">${fmtDate(r.data)}</span><span class="r-clima">${esc(r.clima)}</span></div>
-    <p><b>Equipe:</b> ${esc(r.equipe)||'—'}</p>
-    <p><b>Executado:</b> ${esc(r.serv)||'—'}</p>
-    ${r.prob?`<p><b>Problemas:</b> ${esc(r.prob)}</p>`:''}
-    ${r.amanha?`<p><b>Amanhã:</b> ${esc(r.amanha)}</p>`:''}
-    <p style="text-align:right;margin-top:6px"><button class="row-del" onclick="delRDO(${o.rdos.length-1-ri})">excluir</button></p>
-  </div>`).join('');
-}
-function saveRDO(){
-  const o=DB.obras[currentId];
-  const r={data:val('rData'),clima:val('rClima'),equipe:val('rEquipe'),serv:val('rServ'),
-    receb:val('rReceb'),falta:val('rFalta'),prob:val('rProb'),amanha:val('rAmanha'),resp:val('rResp')};
-  if(!r.serv.trim()){toast("Descreva os serviços do dia","err");return;}
-  o.rdos.push(r);persist();renderRDO();toast("Relatório salvo");
-}
-function delRDO(i){if(!confirm('Excluir este relatório?'))return;DB.obras[currentId].rdos.splice(i,1);persist();renderRDO();}
-function copyRDO(){
-  const o=DB.obras[currentId];
-  const t=`RELATÓRIO DIÁRIO - OBRA: ${o.nome}
-Data: ${fmtDate(val('rData'))}
-Clima: ${val('rClima')}
-Equipe presente: ${val('rEquipe')}
-Serviços executados: ${val('rServ')}
-Materiais recebidos: ${val('rReceb')}
-Materiais faltando: ${val('rFalta')}
-Problemas: ${val('rProb')}
-Previsão amanhã: ${val('rAmanha')}
-Responsável: ${val('rResp')}`;
-  navigator.clipboard.writeText(t).then(()=>toast("Copiado para o WhatsApp")).catch(()=>toast("Não consegui copiar","err"));
-}
 
 /* ===================== PAINEL ===================== */
 function renderPainel(){
@@ -704,13 +704,58 @@ function renderPainel(){
       <div><label>Prazo</label><div style="font-weight:600">${esc(o.info.prazo)||'—'}</div></div>
       <div><label>Equipe</label><div style="font-weight:600">${o.equipe.length} pessoas</div></div>
     </div>
-  </div>
-  <div class="card">
-    <h2>Últimos relatórios</h2>
-    <div>${o.rdos.length?[...o.rdos].slice(-3).reverse().map(r=>`<div class="rdo-item">
-      <div class="r-top"><span class="r-date">${fmtDate(r.data)}</span><span class="r-clima">${esc(r.clima)}</span></div>
-      <p>${esc(r.serv)||'—'}</p></div>`).join(''):'<div class="empty"><b>Sem relatórios</b>Registre o diário para acompanhar aqui.</div>'}</div>
   </div>`;
+}
+
+/* ===================== CRONOGRAMA POR IA ===================== */
+const API_CRONOGRAMA = "/api/ler-cronograma";
+let cronExtraido=null;
+function cronMsg(html,cls){document.getElementById('cronStatus').innerHTML=
+  html?`<div class="imp-msg ${cls||''}">${html}</div>`:'';}
+async function lerCronograma(){
+  const t=document.getElementById('cronTexto').value.trim();
+  if(!t){toast('Cole o texto do cronograma','err');return;}
+  cronMsg('<span class="spin"></span>Lendo o cronograma...','load');
+  try{
+    const r=await fetch(API_CRONOGRAMA,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({texto:t})});
+    if(!r.ok){
+      const e=await r.json().catch(()=>({}));
+      if(r.status===404||r.status===405){cronMsg('A leitura por IA precisa da função publicada no Vercel (/api/ler-cronograma). No modo local ela não responde.','err');return;}
+      cronMsg('Erro: '+esc(e.error||('HTTP '+r.status)),'err');return;
+    }
+    const data=await r.json();
+    if(!data.ok||!data.dados||!Array.isArray(data.dados.etapas)){cronMsg('A IA não retornou etapas utilizáveis.','err');return;}
+    cronExtraido=data.dados.etapas;
+    mostrarRevisaoCron(data.dados);
+  }catch(e){cronMsg('Sem conexão com a função de leitura. No modo local isso é esperado — publique no Vercel.','err');}
+}
+function mostrarRevisaoCron(d){
+  const obs=d.observacoes?`<p style="font-size:12px;color:var(--grey);margin:6px 0">${esc(d.observacoes)}</p>`:'';
+  const rows=(d.etapas||[]).map((e,i)=>`<tr>
+    <td><input value="${esc(e.nome||'')}" onchange="cronEdit(${i},'nome',this.value)"></td>
+    <td style="width:130px"><input type="date" value="${esc(e.inicio||'')}" onchange="cronEdit(${i},'inicio',this.value)"></td>
+    <td style="width:130px"><input type="date" value="${esc(e.fim||'')}" onchange="cronEdit(${i},'fim',this.value)"></td>
+    <td><button class="row-del" onclick="cronDel(${i})">×</button></td></tr>`).join('');
+  document.getElementById('cronStatus').innerHTML=`
+    <div class="imp-msg ok" style="margin-bottom:6px">✓ Cronograma interpretado pela IA. Revise e ajuste — é interpretação, não verdade contratual.</div>
+    ${obs}
+    <div class="tbl-wrap"><table><thead><tr><th>Etapa</th><th>Início</th><th>Fim</th><th></th></tr></thead>
+    <tbody>${rows}</tbody></table></div>
+    <div class="btns" style="margin-top:10px">
+      <button class="btn btn-primary" onclick="aplicarCronograma()">Aplicar ao cronograma</button>
+      <button class="btn btn-ghost" onclick="cronMsg('')">Cancelar</button>
+    </div>`;
+}
+function cronEdit(i,campo,v){cronExtraido[i][campo]=v;}
+function cronDel(i){cronExtraido.splice(i,1);mostrarRevisaoCron({etapas:cronExtraido});}
+function aplicarCronograma(){
+  const o=DB.obras[currentId];
+  const etapas=(cronExtraido||[]).filter(e=>e.nome&&e.nome.trim());
+  if(!etapas.length){toast('Nenhuma etapa para aplicar','err');return;}
+  if(o.etapas.some(e=>e.inicio||e.fim||+e.avanco>0) && !confirm('Isso substitui o cronograma atual. Continuar?'))return;
+  o.etapas=etapas.map(e=>({nome:e.nome,inicio:e.inicio||'',fim:e.fim||'',equipe:'',materiais:'',status:'Não iniciado',avanco:0}));
+  persist();cronExtraido=null;document.getElementById('cronTexto').value='';
+  toast('Cronograma aplicado');renderAbertura();
 }
 
 /* ===================== GANTT ===================== */
@@ -760,7 +805,15 @@ function imprimirObra(){
   const matRows=o.materiais.length?o.materiais.map(m=>`<tr><td>${esc(m.nome)}</td><td style="text-align:center">${esc(m.qtd)||'—'}</td><td style="text-align:center">${esc(m.un)||'—'}</td><td>${esc(m.forn)||'—'}</td><td>${esc(m.status)}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:#888">Sem materiais cadastrados</td></tr>';
   const equipeRows=o.equipe.length?o.equipe.map(p=>`<tr><td>${esc(p.nome)}</td><td>${esc(p.funcao)||'—'}</td><td>${fmt(p.entrada)}</td><td>${esc(p.diaria)||'—'}</td><td>${esc(p.tel)||'—'}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:#888">Sem equipe cadastrada</td></tr>';
   const chkRows=o.checklist.map(c=>`<tr><td style="text-align:center">${c.done?'☑':'☐'}</td><td>${esc(c.item)}</td><td>${esc(c.resp)}</td><td>${esc(c.prazo)}</td></tr>`).join('');
-  const rdoRows=o.rdos.length?[...o.rdos].reverse().map(r=>`<tr><td style="white-space:nowrap">${fmt(r.data)}</td><td>${esc(r.clima)}</td><td>${esc(r.serv)||'—'}</td><td>${esc(r.prob)||'—'}</td></tr>`).join(''):'<tr><td colspan="4" style="text-align:center;color:#888">Sem relatórios</td></tr>';
+  const semanas=getSemanas(o);
+  const semanasPdf=semanas.map(sem=>{
+    const linhas=sem.dias.filter(d=>d.servico||d.equipe||d.material||d.meta)
+      .map(d=>`<tr><td style="white-space:nowrap">${esc(d.dia)}</td><td>${esc(d.servico)||'—'}</td><td>${esc(d.equipe)||'—'}</td><td>${esc(d.material)||'—'}</td><td>${esc(d.meta)||'—'}</td></tr>`).join('');
+    if(!linhas)return '';
+    return `<div class="avoid"><h3>${esc(sem.titulo)}${sem.inicio?' — início '+fmt(sem.inicio):''}</h3>
+      <table><thead><tr><th>Dia</th><th>Serviços</th><th>Equipe</th><th>Material</th><th>Meta</th></tr></thead>
+      <tbody>${linhas}</tbody></table></div>`;
+  }).join('');
   // gantt como imagem inline (reusa o HTML)
   const gantt=ganttHTML(o);
   const libOk=o.liberacao.every(l=>l.ok);
@@ -839,13 +892,11 @@ function imprimirObra(){
   <table><thead><tr><th>Material</th><th>Qtd</th><th>Un</th><th>Fornecedor</th><th>Status</th></tr></thead>
   <tbody>${matRows}</tbody></table></div>
 
+  ${semanasPdf?`${semanasPdf}`:''}
+
   <div class="avoid"><h3>Checklist de abertura</h3>
   <table><thead><tr><th style="width:30px"></th><th>Item</th><th>Responsável</th><th>Prazo</th></tr></thead>
   <tbody>${chkRows}</tbody></table></div>
-
-  <div class="avoid"><h3>Relatórios diários (RDO)</h3>
-  <table><thead><tr><th>Data</th><th>Clima</th><th>Executado</th><th>Problemas</th></tr></thead>
-  <tbody>${rdoRows}</tbody></table></div>
 
   <div class="sig">
     <div>Responsável KNC</div>
@@ -977,7 +1028,6 @@ function seedDemo(){
   o.etapas[1].avanco=100;o.etapas[1].status="Concluído";
   o.etapas[2].avanco=60;o.etapas[2].status="Em andamento";
   o.etapas[3].avanco=25;o.etapas[3].status="Em andamento";
-  o.rdos=[{data:"2026-06-13",clima:"Bom",equipe:"Welson + 2",serv:"Concluída demolição da cozinha; iniciada alvenaria.",receb:"",falta:"Revestimento",prob:"",amanha:"Continuar alvenaria",resp:"Hugo Kreischer"}];
   o.liberacao.forEach((l,i)=>{if(i<4)l.ok=true;});
   DB.obras[o.id]=o; lsSave();
 }
