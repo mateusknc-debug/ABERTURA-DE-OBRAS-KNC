@@ -197,21 +197,20 @@
   @media(max-width:760px){.gantt-name{flex-basis:42%;font-size:12px}}
   @media print{.no-print{display:none!important}}
   /* ===== Frequência ===== */
-  .freq-header{display:flex;align-items:center;gap:14px;flex-wrap:wrap;margin-bottom:14px}
-  .freq-header label{margin:0;font-size:13px}
-  .freq-header input[type=date]{width:auto;padding:8px 12px;border-radius:10px;border:1px solid var(--line)}
-  .freq-table{width:100%;border-collapse:collapse;min-width:480px}
-  .freq-table th{background:var(--navy);color:#fff;font-size:11px;text-transform:uppercase;letter-spacing:.5px;text-align:left;padding:10px 12px;font-weight:700;white-space:nowrap}
-  .freq-table td{padding:8px 10px;border-bottom:1px solid var(--line);vertical-align:middle;font-size:14px}
-  .freq-table tr:hover{background:var(--soft)}
-  .freq-table input[type=checkbox]{width:20px;height:20px;accent-color:var(--green);cursor:pointer}
-  .freq-table input[type=time]{border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px;width:100px}
-  .freq-resumo{display:grid;grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px;margin-top:14px}
-  .freq-card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:10px 12px;border-top:3px solid var(--blue)}
-  .freq-card .fc-name{font-weight:700;font-size:13px;color:var(--navy);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-  .freq-card .fc-dias{font-size:20px;font-weight:800;color:var(--green);margin-top:2px}
-  .freq-card .fc-label{font-size:10.5px;text-transform:uppercase;letter-spacing:.4px;color:var(--grey)}
-  .freq-empty{text-align:center;padding:30px;color:var(--grey);font-size:14px}
+  /* ===== Frequência — Calendário Mensal ===== */
+  .freq-day{display:inline-flex;align-items:center;justify-content:center;width:32px;height:32px;border-radius:7px;border:1px solid var(--line);cursor:pointer;font-size:10px;font-weight:600;color:var(--grey);transition:all .2s;background:#fff}
+  .freq-day.P{background:rgba(46,158,91,.2);border-color:var(--green);color:var(--green)}
+  .freq-day.A{background:rgba(209,67,67,.2);border-color:var(--red);color:var(--red)}
+  .freq-day.fds{opacity:.35;cursor:default}
+  .freq-day.hoje{border:2px solid var(--orange)}
+  .freq-grid{display:flex;flex-wrap:nowrap;gap:3px;overflow-x:auto;padding-bottom:6px;-webkit-overflow-scrolling:touch}
+  .freq-cabecalho{display:flex;gap:3px;flex-wrap:nowrap;overflow-x:auto;padding-bottom:4px;margin-bottom:4px}
+  .freq-cabecalho .fh-label{min-width:110px;font-size:10px;color:var(--grey);font-weight:700;display:flex;align-items:flex-end}
+  .freq-cabecalho .fh-dia{min-width:32px;text-align:center;font-size:9px;font-weight:600;color:var(--grey)}
+  .freq-cabecalho .fh-dia.fds{color:var(--orange)}
+  .freq-resumo-bar{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin:10px 0}
+  .freq-resumo-bar span{font-size:12px}
+  .freq-pct{font-size:13px;font-weight:800}
   @media(max-width:760px){
     .g2,.g3,.g4{grid-template-columns:1fr}
     .kpis{grid-template-columns:1fr 1fr 1fr}
@@ -543,7 +542,7 @@ function renderAbertura(){
     <h2>3 · Plano de equipe</h2>
     <p class="sub">Não inicie sem 1 responsável de campo e a equipe mínima da primeira semana confirmados.</p>
     <div class="tbl-wrap"><table><thead><tr>
-      <th>Nome</th><th>Função</th><th>Entrada</th><th>Diária / Salário</th><th>Telefone</th><th></th>
+      <th>Nome</th><th>Função</th><th>Entrada</th><th>Diária / Salário</th><th>Telefone</th><th>Escala</th><th></th>
     </tr></thead><tbody id="tEquipe">${o.equipe.map((x,idx)=>equipeRow(x,idx)).join('')}</tbody></table></div>
     <button class="add-row" onclick="addEquipe()">+ Adicionar colaborador</button>
   </div>
@@ -607,6 +606,7 @@ function equipeRow(x,idx){return `<tr>
   <td><input type="date" value="${esc(x.entrada)}" onchange="setRow('equipe',${idx},'entrada',this.value)"></td>
   <td><input value="${esc(x.diaria)}" onchange="setRow('equipe',${idx},'diaria',this.value)"></td>
   <td><input value="${esc(x.tel)}" onchange="setRow('equipe',${idx},'tel',this.value)"></td>
+  <td><select onchange="setRow('equipe',${idx},'escala',this.value)"><option value="seg-sex" ${x.escala==='seg-sex'?'selected':''}>Seg-Sex</option><option value="fim-semana" ${x.escala==='fim-semana'?'selected':''}>Fim de semana</option><option value="ambos" ${x.escala==='ambos'?'selected':''}>Todos</option></select></td>
   <td><button class="row-del" onclick="delRow('equipe',${idx})">×</button></td></tr>`;}
 function matRow(x,idx){return `<tr>
   <td><input value="${esc(x.nome)}" onchange="setRow('materiais',${idx},'nome',this.value)"></td>
@@ -703,7 +703,7 @@ function setRow(tbl,i,k,v){DB.obras[currentId][tbl][i][k]=v;persist();}
 function setEtapaAvanco(i,v){v=Math.max(0,Math.min(100,+v||0));const e=DB.obras[currentId].etapas[i];
   e.avanco=v; e.status=v>=100?'Concluído':v>0?'Em andamento':'Não iniciado'; persist();}
 function delRow(tbl,i){DB.obras[currentId][tbl].splice(i,1);persist();renderAbertura();}
-function addEquipe(){DB.obras[currentId].equipe.push({nome:'',funcao:'',entrada:'',diaria:'',tel:''});persist();renderAbertura();}
+function addEquipe(){DB.obras[currentId].equipe.push({nome:'',funcao:'',entrada:'',diaria:'',tel:'',escala:'seg-sex'});persist();renderAbertura();}
 function addMat(){DB.obras[currentId].materiais.push({nome:'',qtd:'',un:'',forn:'',comprar:'',status:'Pendente'});persist();renderAbertura();}
 function addEpi(){DB.obras[currentId].epi.push({nome:'',uniforme:false,botina:false,capacete:false,oculos:false});persist();renderAbertura();}
 function toggleLib(i,v){DB.obras[currentId].liberacao[i].ok=v;persist();
@@ -716,132 +716,158 @@ function renderLibFinal(){const o=DB.obras[currentId];if(!o)return;
     <small>${all?'Todos os itens conferidos. Pode mobilizar.':o.liberacao.filter(l=>l.ok).length+' de '+o.liberacao.length+' itens conferidos'}</small></div>`;}
 
 /* ===================== FREQUÊNCIA ===================== */
-let freqDate=new Date().toISOString().slice(0,10);
+let freqMes=new Date().toISOString().slice(0,7); // YYYY-MM
+
+/* Frequência: dados no formato MSE GESTAO */
+function getPresenca(nome,dia){
+  const o=DB.obras[currentId];if(!o||!o.frequencia)return null;
+  const f=o.frequencia.find(x=>x.key==='freq_'+nome+'_'+dia);
+  return f?f.status:null;
+}
+function freqToggle(nome,dia){
+  const o=DB.obras[currentId];if(!o)return;
+  if(!o.frequencia)o.frequencia=[];
+  const key='freq_'+nome+'_'+dia;
+  const idx=o.frequencia.findIndex(f=>f.key===key);
+  const cur=idx>=0?o.frequencia[idx].status:null;
+  const novo=cur==='P'?'A':(cur==='A'?null:'P');
+  if(idx>=0)o.frequencia.splice(idx,1);
+  if(novo)o.frequencia.push({key,colab:nome,dia,status:novo,ts:Date.now()});
+  persist();renderFrequencia();
+}
+function freqMarcarTodos(nome,mes,diasNoMes){
+  const o=DB.obras[currentId];if(!o)return;
+  if(!o.frequencia)o.frequencia=[];
+  const colab=(o.equipe||[]).find(c=>c.nome===nome);
+  const escala=colab?(colab.escala||'seg-sex'):'seg-sex';
+  const parts=mes.split('-');
+  const ano=parseInt(parts[0]);const mesN=parseInt(parts[1]);
+  for(let d=1;d<=diasNoMes;d++){
+    const dom=new Date(ano,mesN-1,d).getDay();
+    const isFds=dom===0||dom===6;
+    let trabalha=false;
+    if(escala==='seg-sex')trabalha=!isFds;
+    else if(escala==='fim-semana')trabalha=isFds;
+    else trabalha=true;
+    if(!trabalha)continue;
+    const data=mes+'-'+(d<10?'0'+d:String(d));
+    const key='freq_'+nome+'_'+data;
+    const idx=o.frequencia.findIndex(f=>f.key===key);
+    if(idx>=0)o.frequencia[idx].status='P';
+    else o.frequencia.push({key,colab:nome,dia:data,status:'P',ts:Date.now()});
+  }
+  persist();renderFrequencia();
+}
 
 function renderFrequencia(){
   const o=DB.obras[currentId];if(!o)return;
   const team=o.equipe||[];
   const freq=o.frequencia||[];
-  // Get records for selected date
-  const dayRecs=freq.filter(f=>f.data===freqDate);
-  const recMap={}; dayRecs.forEach(r=>{recMap[r.colab]=r;});
+  const parts=freqMes.split('-');
+  const ano=parseInt(parts[0]);const mesN=parseInt(parts[1]);
+  const diasNoMes=new Date(ano,mesN,0).getDate();
+  const hoje=new Date().toISOString().split('T')[0];
+  const nomesDia=['D','S','T','Q','Q','S','S'];
+
+  // Stats do dia
+  let presH=0,ausH=0;
+  team.forEach(c=>{const st=getPresenca(c.nome,hoje);if(st==='P')presH++;else if(st==='A')ausH++;});
 
   let html=`
   <div class="card">
-    <h2>Frequência diária de colaboradores</h2>
-    <p class="sub">Registre a presença e o horário de entrada de cada colaborador. Os dados são salvos automaticamente.</p>
-    <div class="freq-header">
-      <label>Data:</label>
-      <input type="date" id="freqDatePicker" value="${freqDate}" onchange="freqChangeDate(this.value)">
-    </div>`;
+    <h2>Lista de Frequência</h2>
+    <p class="sub">Controle de presença da equipe por calendário mensal</p>
+    <div style="display:grid;grid-template-columns:repeat(4,1fr);gap:10px;margin:14px 0">
+      <div style="background:rgba(46,158,91,.1);border:1px solid rgba(46,158,91,.2);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:800;color:var(--green)">${presH}</div>
+        <div style="font-size:10px;text-transform:uppercase;color:var(--grey);font-weight:700">Presentes hoje</div>
+      </div>
+      <div style="background:rgba(209,67,67,.1);border:1px solid rgba(209,67,67,.2);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:800;color:var(--red)">${ausH}</div>
+        <div style="font-size:10px;text-transform:uppercase;color:var(--grey);font-weight:700">Ausentes hoje</div>
+      </div>
+      <div style="background:rgba(46,117,182,.1);border:1px solid rgba(46,117,182,.2);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:800;color:var(--blue)">${team.length}</div>
+        <div style="font-size:10px;text-transform:uppercase;color:var(--grey);font-weight:700">Cadastrados</div>
+      </div>
+      <div style="background:rgba(224,168,0,.1);border:1px solid rgba(224,168,0,.2);border-radius:10px;padding:10px;text-align:center">
+        <div style="font-size:20px;font-weight:800;color:var(--yellow)">${team.length?Math.round(presH/team.length*100):0}%</div>
+        <div style="font-size:10px;text-transform:uppercase;color:var(--grey);font-weight:700">Taxa presença</div>
+      </div>
+    </div>
+    <div style="margin-bottom:14px"><label>Mês de referência</label>
+      <input type="month" value="${freqMes}" onchange="freqMes=this.value;renderFrequencia()" style="width:auto;padding:8px 12px;border-radius:10px;border:1px solid var(--line)"></div>
+  </div>`;
 
   if(!team.length){
-    html+=`<div class="freq-empty">⚠️ Nenhum colaborador cadastrado na aba <b>Abertura → Plano de equipe</b>.<br>Adicione colaboradores lá primeiro.</div>`;
+    html+=`<div class="card" style="text-align:center;color:var(--grey);padding:30px">⚠️ Nenhum colaborador cadastrado na aba <b>Abertura → Plano de equipe</b>.<br>Adicione colaboradores lá primeiro.</div>`;
   } else {
-    const diasDaSemana=['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
-    const d=new Date(freqDate+'T12:00:00');
-    const diaLabel=diasDaSemana[d.getDay()]+', '+d.toLocaleDateString('pt-BR');
+    // Cabeçalho dos dias
+    let cabHtml='<div class="freq-cabecalho"><div class="fh-label">COLABORADOR</div>';
+    for(let d=1;d<=diasNoMes;d++){
+      const dom=new Date(ano,mesN-1,d).getDay();
+      const isFds=dom===0||dom===6;
+      cabHtml+=`<div class="fh-dia ${isFds?'fds':''}">${d}<br>${nomesDia[dom]}</div>`;
+    }
+    cabHtml+='</div>';
 
-    html+=`<div class="tbl-wrap"><table class="freq-table"><thead><tr>
-      <th>Colaborador</th><th>Função</th><th style="text-align:center">Presente</th><th>Entrada</th><th>Observação</th>
-    </tr></thead><tbody>`;
-
-    team.forEach((c,idx)=>{
-      const rec=recMap[c.nome]||{presente:false,entrada:'',obs:''};
-      html+=`<tr>
-        <td style="font-weight:600">${esc(c.nome)}</td>
-        <td style="color:var(--grey);font-size:13px">${esc(c.funcao)}</td>
-        <td style="text-align:center"><input type="checkbox" ${rec.presente?'checked':''} onchange="freqToggle('${esc(c.nome)}',this.checked)"></td>
-        <td><input type="time" value="${esc(rec.entrada)}" onchange="freqSetHora('${esc(c.nome)}',this.value)" ${!rec.presente?'disabled':''}></td>
-        <td><input value="${esc(rec.obs)}" placeholder="—" onchange="freqSetObs('${esc(c.nome)}',this.value)" style="border:1px solid var(--line);border-radius:8px;padding:6px 8px;font-size:13px"></td>
-      </tr>`;
-    });
-
-    html+=`</tbody></table></div>`;
-
-    // Resumo por colaborador — dias, semanas, meses
-    const allDates=[...new Set(freq.map(f=>f.data))].sort();
-    const contagem={}; team.forEach(c=>{
-      const dias=freq.filter(f=>f.colab===c.nome&&f.presente).length;
-      const meses=Math.floor(dias/22); // ~22 dias úteis por mês
-      const semanas=Math.floor((dias%22)/5); // ~5 dias úteis por semana
-      const diasRest=dias%5;
-      contagem[c.nome]={dias,meses,semanas,diasRest};
-    });
-
-    html+=`<div style="margin-top:18px"><h2 style="margin-bottom:10px">Resumo de frequência</h2>
-      <p class="sub">Total de ${allDates.length} dia(s) com registro</p>
-      <div class="tbl-wrap" style="margin-top:10px"><table class="freq-table"><thead><tr>
-        <th>Colaborador</th><th style="text-align:center">Dias</th><th style="text-align:center">Semanas</th><th style="text-align:center">Meses</th>
-      </tr></thead><tbody>`;
     team.forEach(c=>{
-      const r=contagem[c.nome]||{dias:0,meses:0,semanas:0,diasRest:0};
-      const semanasTxt=r.semanas>0?(r.semanas+(r.diasRest>0?'+'+r.diasRest+'d':'')+' sem'):'—';
-      html+=`<tr>
-        <td style="font-weight:600">${esc(c.nome)}</td>
-        <td style="text-align:center;font-weight:800;font-size:16px;color:var(--green)">${r.dias}</td>
-        <td style="text-align:center;font-weight:700;color:var(--blue)">${semanasTxt}</td>
-        <td style="text-align:center;font-weight:700;color:var(--navy)">${r.meses>0?r.meses+' mes'+(r.meses>1?'es':''):'—'}</td>
-      </tr>`;
-    });
-    html+=`</tbody></table></div>`;
+      const escala=c.escala||'seg-sex';
+      const escalaLabel=escala==='fim-semana'?'Fim de semana':(escala==='ambos'?'Todos os dias':'Seg-Sex');
+      let pMes=0,aMes=0,totalDias=0;
+      let diasHtml='<div class="freq-grid">';
 
-    // Cards resumo visual
-    html+=`<div class="freq-resumo">`;
-    team.forEach(c=>{
-      const r=contagem[c.nome]||{dias:0};
-      html+=`<div class="freq-card"><div class="fc-name">${esc(c.nome)}</div>
-        <div class="fc-dias">${r.dias}</div>
-        <div class="fc-label">dias trabalhados</div></div>`;
+      // Label do colaborador
+      diasHtml=`<div style="min-width:110px;display:flex;flex-direction:column;justify-content:center;padding-right:6px">
+        <div style="font-weight:700;font-size:13px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(c.nome)}</div>
+        <div style="font-size:10px;color:var(--grey)">${esc(c.funcao||'—')} · ${escalaLabel}</div></div>`;
+
+      for(let d=1;d<=diasNoMes;d++){
+        const dom=new Date(ano,mesN-1,d).getDay();
+        const isFds=dom===0||dom===6;
+        let trabalha=false;
+        if(escala==='seg-sex')trabalha=!isFds;
+        else if(escala==='fim-semana')trabalha=isFds;
+        else trabalha=true;
+
+        const data=freqMes+'-'+(d<10?'0'+d:String(d));
+        const st=getPresenca(c.nome,data);
+        if(trabalha)totalDias++;
+        if(st==='P')pMes++;else if(st==='A')aMes++;
+
+        const cls=['freq-day'];
+        if(st==='P')cls.push('P');else if(st==='A')cls.push('A');
+        if(isFds&&escala==='seg-sex')cls.push('fds');
+        if(data===hoje)cls.push('hoje');
+
+        diasHtml+=`<div class="${cls.join(' ')}" onclick="freqToggle('${esc(c.nome)}','${data}')" title="${data}${trabalha?'':' - folga'}">
+          <span style="font-size:8px;opacity:.7;line-height:1">${d}</span><br>
+          <span style="font-size:9px;line-height:1">${st||''}</span></div>`;
+      }
+      diasHtml+='</div>';
+
+      const pct=totalDias>0?Math.round(pMes/totalDias*100):0;
+      const corPct=pct>=85?'var(--green)':(pct>=60?'var(--yellow)':'var(--red)');
+
+      html+=`<div class="card" style="margin-bottom:10px">
+        <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:8px;margin-bottom:8px">
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap">
+            <span style="font-size:12px">Presenças: <b style="color:var(--green)">${pMes}</b></span>
+            <span style="font-size:12px">Faltas: <b style="color:var(--red)">${aMes}</b></span>
+            <span style="font-size:12px">Dias úteis: <b>${totalDias}</b></span>
+            <span class="freq-pct" style="color:${corPct}">${pct}%</span>
+          </div>
+          <div style="display:flex;gap:6px">
+            <button class="btn btn-ghost" style="padding:6px 10px;font-size:12px" onclick="freqMarcarTodos('${esc(c.nome)}','${freqMes}',${diasNoMes})">✅ Marcar tudo</button>
+          </div>
+        </div>
+        ${cabHtml}
+        ${diasHtml}
+      </div>`;
     });
-    html+=`</div></div>`;
   }
 
-  html+=`</div>`;
   document.getElementById('v-frequencia').innerHTML=html;
-}
-
-function freqChangeDate(d){
-  freqDate=d;
-  renderFrequencia();
-}
-
-function freqToggle(nome,presente){
-  const o=DB.obras[currentId];if(!o)return;
-  if(!o.frequencia)o.frequencia=[];
-  const idx=o.frequencia.findIndex(f=>f.data===freqDate&&f.colab===nome);
-  if(idx>=0){
-    o.frequencia[idx].presente=presente;
-    if(!presente){o.frequencia[idx].entrada='';}
-  } else {
-    o.frequencia.push({data:freqDate,colab:nome,presente:presente,entrada:'',obs:''});
-  }
-  persist();
-  renderFrequencia();
-}
-
-function freqSetHora(nome,hora){
-  const o=DB.obras[currentId];if(!o)return;
-  if(!o.frequencia)o.frequencia=[];
-  const idx=o.frequencia.findIndex(f=>f.data===freqDate&&f.colab===nome);
-  if(idx>=0){
-    o.frequencia[idx].entrada=hora;
-  } else {
-    o.frequencia.push({data:freqDate,colab:nome,presente:true,entrada:hora,obs:''});
-  }
-  persist();
-}
-
-function freqSetObs(nome,obs){
-  const o=DB.obras[currentId];if(!o)return;
-  if(!o.frequencia)o.frequencia=[];
-  const idx=o.frequencia.findIndex(f=>f.data===freqDate&&f.colab===nome);
-  if(idx>=0){
-    o.frequencia[idx].obs=obs;
-  } else {
-    o.frequencia.push({data:freqDate,colab:nome,presente:false,entrada:'',obs:obs});
-  }
-  persist();
 }
 
 /* ===================== PAINEL ===================== */
@@ -855,11 +881,11 @@ function renderPainel(){
 
   // Frequência — resumo
   const freq=o.frequencia||[];
-  const freqDates=[...new Set(freq.map(f=>f.data))].sort();
-  const freqTotal=freq.filter(f=>f.presente).length;
+  const freqDates=[...new Set(freq.map(f=>f.dia))].sort();
+  const freqTotal=freq.filter(f=>f.status==='P').length;
   const freqTeam=o.equipe||[];
   const freqResumo=freqTeam.map(c=>{
-    const dias=freq.filter(f=>f.colab===c.nome&&f.presente).length;
+    const dias=freq.filter(f=>f.colab===c.nome&&f.status==='P').length;
     const meses=Math.floor(dias/22);
     const semanas=Math.floor((dias%22)/5);
     return {nome:c.nome,funcao:c.funcao,dias,meses,semanas};
@@ -1033,11 +1059,11 @@ function imprimirObra(){
 
   // Frequência — resumo para o PDF
   const freq=o.frequencia||[];
-  const freqDates=[...new Set(freq.map(f=>f.data))].sort();
+  const freqDates=[...new Set(freq.map(f=>f.dia))].sort();
   let freqPdf='';
   if(freq.length && o.equipe.length){
     const freqRows=o.equipe.map(p=>{
-      const dias=freq.filter(f=>f.colab===p.nome&&f.presente).length;
+      const dias=freq.filter(f=>f.colab===p.nome&&f.status==='P').length;
       const meses=Math.floor(dias/22);
       const semanas=Math.floor((dias%22)/5);
       return `<tr><td style="font-weight:bold">${esc(p.nome)}</td><td>${esc(p.funcao)||'—'}</td><td style="text-align:center">${dias}</td><td style="text-align:center">${semanas>0?semanas+' sem':'—'}</td><td style="text-align:center">${meses>0?meses+' mes'+(meses>1?'es':''):'—'}</td></tr>`;
