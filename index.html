@@ -758,16 +758,39 @@ function renderFrequencia(){
 
     html+=`</tbody></table></div>`;
 
-    // Resumo por colaborador
+    // Resumo por colaborador — dias, semanas, meses
     const allDates=[...new Set(freq.map(f=>f.data))].sort();
-    const contagem={}; team.forEach(c=>{contagem[c.nome]=freq.filter(f=>f.colab===c.nome&&f.presente).length;});
+    const contagem={}; team.forEach(c=>{
+      const dias=freq.filter(f=>f.colab===c.nome&&f.presente).length;
+      const meses=Math.floor(dias/22); // ~22 dias úteis por mês
+      const semanas=Math.floor((dias%22)/5); // ~5 dias úteis por semana
+      const diasRest=dias%5;
+      contagem[c.nome]={dias,meses,semanas,diasRest};
+    });
 
-    html+=`<div style="margin-top:18px"><h2 style="margin-bottom:10px">Resumo — dias trabalhados</h2>
+    html+=`<div style="margin-top:18px"><h2 style="margin-bottom:10px">Resumo de frequência</h2>
       <p class="sub">Total de ${allDates.length} dia(s) com registro</p>
-      <div class="freq-resumo">`;
+      <div class="tbl-wrap" style="margin-top:10px"><table class="freq-table"><thead><tr>
+        <th>Colaborador</th><th style="text-align:center">Dias</th><th style="text-align:center">Semanas</th><th style="text-align:center">Meses</th>
+      </tr></thead><tbody>`;
     team.forEach(c=>{
+      const r=contagem[c.nome]||{dias:0,meses:0,semanas:0,diasRest:0};
+      const semanasTxt=r.semanas>0?(r.semanas+(r.diasRest>0?'+'+r.diasRest+'d':'')+' sem'):'—';
+      html+=`<tr>
+        <td style="font-weight:600">${esc(c.nome)}</td>
+        <td style="text-align:center;font-weight:800;font-size:16px;color:var(--green)">${r.dias}</td>
+        <td style="text-align:center;font-weight:700;color:var(--blue)">${semanasTxt}</td>
+        <td style="text-align:center;font-weight:700;color:var(--navy)">${r.meses>0?r.meses+' mes'+(r.meses>1?'es':''):'—'}</td>
+      </tr>`;
+    });
+    html+=`</tbody></table></div>`;
+
+    // Cards resumo visual
+    html+=`<div class="freq-resumo">`;
+    team.forEach(c=>{
+      const r=contagem[c.nome]||{dias:0};
       html+=`<div class="freq-card"><div class="fc-name">${esc(c.nome)}</div>
-        <div class="fc-dias">${contagem[c.nome]||0}</div>
+        <div class="fc-dias">${r.dias}</div>
         <div class="fc-label">dias trabalhados</div></div>`;
     });
     html+=`</div></div>`;
@@ -961,7 +984,6 @@ function imprimirObra(){
   const av=Math.round(o.etapas.reduce((s,e)=>s+(+e.avanco||0),0)/o.etapas.length);
   const fmt=(d)=>fmtDate(d)||'—';
   const linha=(l,v)=>`<tr><td class="pl">${l}</td><td>${esc(v)||'—'}</td></tr>`;
-  const win=window.open('','_print');
   const etapasRows=o.etapas.map(e=>`<tr><td>${esc(e.nome)}</td><td>${fmt(e.inicio)}</td><td>${fmt(e.fim)}</td><td>${esc(e.equipe)||'—'}</td><td style="text-align:center">${e.avanco}%</td><td>${esc(e.status)}</td></tr>`).join('');
   const matRows=o.materiais.length?o.materiais.map(m=>`<tr><td>${esc(m.nome)}</td><td style="text-align:center">${esc(m.qtd)||'—'}</td><td style="text-align:center">${esc(m.un)||'—'}</td><td>${esc(m.forn)||'—'}</td><td>${esc(m.status)}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:#888">Sem materiais cadastrados</td></tr>';
   const equipeRows=o.equipe.length?o.equipe.map(p=>`<tr><td>${esc(p.nome)}</td><td>${esc(p.funcao)||'—'}</td><td>${fmt(p.entrada)}</td><td>${esc(p.diaria)||'—'}</td><td>${esc(p.tel)||'—'}</td></tr>`).join(''):'<tr><td colspan="5" style="text-align:center;color:#888">Sem equipe cadastrada</td></tr>';
@@ -975,15 +997,36 @@ function imprimirObra(){
       <table><thead><tr><th>Dia</th><th>Serviços</th><th>Equipe</th><th>Material</th><th>Meta</th></tr></thead>
       <tbody>${linhas}</tbody></table></div>`;
   }).join('');
-  // gantt como imagem inline (reusa o HTML)
   const gantt=ganttHTML(o);
   const libOk=o.liberacao.every(l=>l.ok);
 
-  win.document.write(`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8"><title>${esc(o.nome)} — Relatório</title>
+  // Frequência — resumo para o PDF
+  const freq=o.frequencia||[];
+  const freqDates=[...new Set(freq.map(f=>f.data))].sort();
+  let freqPdf='';
+  if(freq.length && o.equipe.length){
+    const freqRows=o.equipe.map(p=>{
+      const dias=freq.filter(f=>f.colab===p.nome&&f.presente).length;
+      const meses=Math.floor(dias/22);
+      const semanas=Math.floor((dias%22)/5);
+      return `<tr><td style="font-weight:bold">${esc(p.nome)}</td><td>${esc(p.funcao)||'—'}</td><td style="text-align:center">${dias}</td><td style="text-align:center">${semanas>0?semanas+' sem':'—'}</td><td style="text-align:center">${meses>0?meses+' mes'+(meses>1?'es':''):'—'}</td></tr>`;
+    }).join('');
+    freqPdf=`<div class="avoid"><h3>Frequência de colaboradores (${freqDates.length} dias com registro)</h3>
+      <table><thead><tr><th>Colaborador</th><th>Função</th><th>Dias</th><th>Semanas</th><th>Meses</th></tr></thead>
+      <tbody>${freqRows}</tbody></table></div>`;
+  }
+
+  // Detectar iOS para método de impressão compatível
+  const isIOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||
+    (navigator.platform==='MacIntel'&&navigator.maxTouchPoints>1);
+
+  const htmlDoc=`<!DOCTYPE html><html lang="pt-BR"><head><meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>${esc(o.nome)} — Relatório</title>
   <style>
     @page{size:A4;margin:14mm}
     *{box-sizing:border-box;margin:0;padding:0}
-    body{font-family:Arial,Helvetica,sans-serif;color:#1B2230;font-size:11px;line-height:1.45}
+    body{font-family:Arial,Helvetica,sans-serif;color:#1B2230;font-size:11px;line-height:1.45;-webkit-print-color-adjust:exact;print-color-adjust:exact}
     .pg-head{display:flex;align-items:center;gap:12px;border-bottom:3px solid #E8722A;padding-bottom:10px;margin-bottom:14px}
     .pg-head .t b{font-size:17px;color:#1A2A45;display:block}
     .pg-head .t span{font-size:11px;color:#666;letter-spacing:1px;text-transform:uppercase}
@@ -998,7 +1041,6 @@ function imprimirObra(){
     .kpi{flex:1;border:1px solid #e2e6ec;border-top:3px solid #2E75B6;border-radius:6px;padding:8px}
     .kpi .l{font-size:8.5px;text-transform:uppercase;color:#666;font-weight:bold}
     .kpi .v{font-size:16px;font-weight:800;color:#1A2A45}
-    /* gantt */
     .gantt{font-size:9.5px;margin:6px 0}
     .gantt-row,.gantt-head{display:flex;align-items:center;margin-bottom:4px}
     .gantt-name{flex:0 0 32%;padding-right:8px;font-weight:600;overflow:hidden;white-space:nowrap;text-overflow:ellipsis}
@@ -1053,6 +1095,8 @@ function imprimirObra(){
   <table><thead><tr><th>Material</th><th>Qtd</th><th>Un</th><th>Fornecedor</th><th>Status</th></tr></thead>
   <tbody>${matRows}</tbody></table></div>
 
+  ${freqPdf}
+
   ${semanasPdf?`${semanasPdf}`:''}
 
   <div class="avoid"><h3>Checklist de abertura</h3>
@@ -1064,9 +1108,27 @@ function imprimirObra(){
     <div>Cliente / Fiscalização</div>
   </div>
 
-  </body></html>`);
-  win.document.close();
-  setTimeout(()=>{win.focus();win.print();},400);
+  </body></html>`;
+
+  // Gerar Blob URL (compatível com iOS/Safari)
+  const blob=new Blob([htmlDoc],{type:'text/html;charset=utf-8'});
+  const blobUrl=URL.createObjectURL(blob);
+
+  if(isIOS){
+    // iOS: navega para o blob — usuário usa Compartilhar > Salvar como PDF
+    toast('Use o botão Compartilhar → Salvar como PDF');
+    window.location.href=blobUrl;
+  } else {
+    // Desktop: abre janela e chama print()
+    const win=window.open(blobUrl,'_blank');
+    if(win){
+      setTimeout(()=>{try{win.print();}catch(e){}},600);
+    } else {
+      // Popup bloqueado: fallback — abre na mesma aba
+      toast('Permita pop-ups para imprimir, ou use Ctrl+P');
+      window.location.href=blobUrl;
+    }
+  }
 }
 
 /* ===================== IMPORTAR CONTRATO ===================== */
