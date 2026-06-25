@@ -101,7 +101,7 @@
   .btn-ghost{background:#fff;color:var(--navy);border:1px solid var(--line)}
   .btn-ghost:hover{border-color:var(--blue)}
   /* ===== Painel ===== */
-  .kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:12px;margin-bottom:16px}
+  .kpis{display:grid;grid-template-columns:repeat(5,1fr);gap:12px;margin-bottom:16px}
   .kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;border-top:4px solid var(--blue)}
   .kpi .k-label{font-size:11px;text-transform:uppercase;letter-spacing:.5px;color:var(--grey);font-weight:700}
   .kpi .k-val{font-size:21px;font-weight:800;color:var(--navy);margin-top:4px;line-height:1.1}
@@ -214,7 +214,8 @@
   .freq-empty{text-align:center;padding:30px;color:var(--grey);font-size:14px}
   @media(max-width:760px){
     .g2,.g3,.g4{grid-template-columns:1fr}
-    .kpis{grid-template-columns:1fr 1fr}
+    .kpis{grid-template-columns:1fr 1fr 1fr}
+    .kpis .kpi:nth-child(4),.kpis .kpi:nth-child(5){grid-column:span 1}
     .etapa-bar .e-name{flex-basis:46%}
     .bar{padding:10px 14px}
   }
@@ -851,6 +852,19 @@ function renderPainel(){
   const matPend=o.materiais.filter(m=>m.status==='Pendente').length;
   const libOk=o.liberacao.every(l=>l.ok);
   const color=(p)=>p>=100?'var(--green)':p>0?'var(--yellow)':'var(--red)';
+
+  // Frequência — resumo
+  const freq=o.frequencia||[];
+  const freqDates=[...new Set(freq.map(f=>f.data))].sort();
+  const freqTotal=freq.filter(f=>f.presente).length;
+  const freqTeam=o.equipe||[];
+  const freqResumo=freqTeam.map(c=>{
+    const dias=freq.filter(f=>f.colab===c.nome&&f.presente).length;
+    const meses=Math.floor(dias/22);
+    const semanas=Math.floor((dias%22)/5);
+    return {nome:c.nome,funcao:c.funcao,dias,meses,semanas};
+  });
+
   document.getElementById('v-painel').innerHTML=`
   <div class="card no-print" style="display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap">
     <div><b style="color:var(--navy)">${esc(o.nome)}</b><div style="font-size:12px;color:var(--grey)">Relatório completo da obra</div></div>
@@ -861,6 +875,7 @@ function renderPainel(){
     <div class="kpi ${libOk?'green':'red'}"><div class="k-label">Liberação</div><div class="k-val">${libOk?'OK':'Pendente'}</div></div>
     <div class="kpi"><div class="k-label">Checklist</div><div class="k-val">${chkDone}/${o.checklist.length}</div></div>
     <div class="kpi ${matPend?'red':'green'}"><div class="k-label">Materiais pendentes</div><div class="k-val">${matPend}</div></div>
+    <div class="kpi ${freqDates.length?'green':''}"><div class="k-label">Frequência</div><div class="k-val">${freqDates.length} dias</div></div>
   </div>
   <div class="card">
     <h2>Cronograma — Gantt</h2>
@@ -888,7 +903,23 @@ function renderPainel(){
       <div><label>Prazo</label><div style="font-weight:600">${esc(o.info.prazo)||'—'}</div></div>
       <div><label>Equipe</label><div style="font-weight:600">${o.equipe.length} pessoas</div></div>
     </div>
-  </div>`;
+  </div>
+  ${freqResumo.length?`
+  <div class="card">
+    <h2>Frequência da equipe</h2>
+    <p class="sub">${freqDates.length} dia(s) com registro · ${freqTotal} presenças registradas</p>
+    <div class="tbl-wrap"><table><thead><tr>
+      <th>Colaborador</th><th>Função</th><th style="text-align:center">Dias</th><th style="text-align:center">Semanas</th><th style="text-align:center">Meses</th>
+    </tr></thead><tbody>
+      ${freqResumo.map(r=>`<tr>
+        <td style="font-weight:600">${esc(r.nome)}</td>
+        <td style="color:var(--grey);font-size:13px">${esc(r.funcao)||'—'}</td>
+        <td style="text-align:center;font-weight:800;font-size:16px;color:var(--green)">${r.dias}</td>
+        <td style="text-align:center;font-weight:700;color:var(--blue)">${r.semanas>0?r.semanas+' sem':'—'}</td>
+        <td style="text-align:center;font-weight:700;color:var(--navy)">${r.meses>0?r.meses+' mes'+(r.meses>1?'es':''):'—'}</td>
+      </tr>`).join('')}
+    </tbody></table></div>
+  </div>`:''}`;
 }
 
 /* ===================== CRONOGRAMA POR IA ===================== */
