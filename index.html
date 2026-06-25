@@ -30,6 +30,12 @@
     background:rgba(255,255,255,.1);color:#cdd8e8}
   .cloud .dot{width:7px;height:7px;border-radius:50%;background:var(--yellow)}
   .cloud.live .dot{background:#49d17f}
+  /* ===== Save indicator ===== */
+  .cloud.saving .dot{background:var(--blue);animation:sp .7s linear infinite}
+  .cloud.saving .dot{width:10px;height:10px;border:2px solid #cdd8e8;border-top-color:var(--blue);border-radius:50%;background:transparent!important}
+  .cloud.saved .dot{background:#49d17f!important;animation:none}
+  .cloud .save-label{transition:opacity .2s}
+  @keyframes sp{to{transform:rotate(360deg)}}
   /* ===== Tabs ===== */
   nav{background:#16243d;border-top:1px solid #2a3f63}
   .tabs{max-width:1180px;margin:0 auto;display:flex;gap:2px;padding:0 10px;overflow-x:auto}
@@ -218,6 +224,7 @@
     <div class="brand"><b>KNC Brasil</b><span>Abertura de Obra</span></div>
     <div class="obra-pick">
       <span class="cloud" id="cloud"><span class="dot"></span><span id="cloudTxt">Local</span></span>
+      <span id="saveIndicator" style="display:none;font-size:11px;padding:4px 9px;border-radius:20px;align-items:center;gap:4px;font-weight:600"></span>
       <select id="obraSelect" onchange="selectObra(this.value)"></select>
       <button id="logoutBtn" onclick="doLogout()" title="Sair" style="display:none;background:#22365a;color:#fff;border:1px solid #34507e;border-radius:9px;padding:8px 10px;font-size:13px;cursor:pointer">Sair</button>
     </div>
@@ -343,13 +350,39 @@ let DB={obras:{}}, currentId=null, fb=null;
 function lsLoad(){try{return JSON.parse(localStorage.getItem('knc_obras')||'{"obras":{}}')}catch(e){return {obras:{}}}}
 function lsSave(){localStorage.setItem('knc_obras',JSON.stringify(DB))}
 
+let saveTimeout;
+function showSaveState(state){
+  const el=document.getElementById('saveIndicator');
+  if(!el)return;
+  clearTimeout(saveTimeout);
+  if(state==='saving'){
+    el.style.display='inline-flex';
+    el.style.background='rgba(46,117,182,.12)';
+    el.style.color='var(--blue)';
+    el.innerHTML='<span class="spin"></span>Salvando...';
+  } else if(state==='saved'){
+    el.style.display='inline-flex';
+    el.style.background='rgba(46,158,91,.12)';
+    el.style.color='var(--green)';
+    el.innerHTML='✓ Salvo';
+    saveTimeout=setTimeout(()=>{el.style.display='none';},2000);
+  } else if(state==='error'){
+    el.style.display='inline-flex';
+    el.style.background='rgba(209,67,67,.12)';
+    el.style.color='var(--red)';
+    el.innerHTML='✕ Erro ao salvar';
+    saveTimeout=setTimeout(()=>{el.style.display='none';},4000);
+  }
+}
 async function persist(){
   DB.obras[currentId].updated=Date.now();
+  showSaveState('saving');
   if(USE_FIREBASE && fb){
     try{
-      await fb.setDoc(fb.doc(fb.db,"obras",currentId),DB.obras[currentId]); // escreve só ESTA obra
-    }catch(e){toast("Erro ao salvar na nuvem","err");console.error(e);}
-  } else { lsSave(); }
+      await fb.setDoc(fb.doc(fb.db,"obras",currentId),DB.obras[currentId]);
+      showSaveState('saved');
+    }catch(e){showSaveState('error');toast("Erro ao salvar na nuvem","err");console.error(e);}
+  } else { lsSave(); showSaveState('saved'); }
 }
 
 /* ===================== FIREBASE INIT ===================== */
